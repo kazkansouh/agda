@@ -282,6 +282,10 @@ inductiveCheck b n t = do
                           [ "The builtin", b
                           , "must be a datatype with", show n
                           , "constructors" ]
+          Record {} | n == 1 -> return ()
+                    | otherwise -> typeError $ GenericError $ unwords
+                          [ "The builtin", b, "could not be bound to a record as it has",
+                            show n, "constructors"]
           _ -> err
       _ -> err
 

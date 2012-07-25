@@ -40,6 +40,7 @@ importsForPrim =
   xForPrim $
   L.map (\(s, ms) -> (s, return (L.map HS.ModuleName ms))) $
   [ "CHAR" |-> ["Data.Char"]
+  , "STRING" |-> ["Data.List"]
   -- , "IO" |-> ["System.IO"]
   ]
   where (|->) = (,)
@@ -130,6 +131,8 @@ primBody s = maybe unimplemented (either (hsVarUQ . HS.Ident) id <$>) $
                                 return $ repl [toN] $ "\\ x -> <<0>> (abs x)"
   , "primNatToInteger"   |-> bltQual' "NATURAL" mazNatToInteger
   , "primShowInteger"    |-> return "(show :: Integer -> String)"
+  , "primShowNat"        |-> do toN <- bltQual' "NATURAL" mazNatToInteger
+                                return $ repl [toN] "(\\ x -> ((show :: Integer -> String) $ <<0>> x))"
 
   -- Natural number functions
   , "primNatPlus"     |-> binNat "(+)"
@@ -181,7 +184,10 @@ primBody s = maybe unimplemented (either (hsVarUQ . HS.Ident) id <$>) $
   , "primStringFromList" |-> bltQual' "STRING" mazListToString
   , "primStringAppend"   |-> binAsis "(++)" "String"
   , "primStringEquality" |-> rel "(==)" "String"
+  , "primStringPrefix"   |-> rel "Data.List.isPrefixOf" "String"
   , "primShowString"     |-> return "(show :: String -> String)"
+  , "primStringToNat"    |->  do toN <- bltQual' "NATURAL" mazIntegerToNat
+                                 return $ repl [toN] $ "(\\ x -> <<0>> (fst (head ((reads :: ReadS Integer) x))))"
 
   -- Reflection
   , "primQNameEquality"   |-> rel "(==)" "MAlonzo.RTE.QName () ()"

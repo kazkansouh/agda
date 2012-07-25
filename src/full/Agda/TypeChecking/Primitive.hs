@@ -11,6 +11,7 @@ import Control.Monad.Error
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Char
+import qualified Data.List as List
 
 import Agda.Interaction.Options
 
@@ -518,6 +519,7 @@ primitiveFunctions = Map.fromList
     , "primLevelZero"	    |-> mkPrimLevelZero
     , "primLevelSuc"	    |-> mkPrimLevelSuc
     , "primLevelMax"	    |-> mkPrimLevelMax
+    , "primShowNat"	    |-> mkPrimFun1 (Str . show :: Nat -> Str)
 
     -- Floating point functions
     , "primIntegerToFloat"  |-> mkPrimFun1 (fromIntegral :: Integer -> Double)
@@ -549,6 +551,8 @@ primitiveFunctions = Map.fromList
     , "primCharToNat"       |-> mkPrimFun1 (fromIntegral . fromEnum :: Char -> Nat)
     , "primNatToChar"       |-> mkPrimFun1 (toEnum . fromIntegral   :: Nat -> Char)
     , "primShowChar"	    |-> mkPrimFun1 (Str . show . pretty . LitChar noRange)
+    -- not a pretty solution, but any bad input will result in a error
+    , "primStringToNat"     |-> mkPrimFun1 (\s -> Nat $ fst $ head $ reads s)
 
     -- String functions
     , "primStringToList"    |-> mkPrimFun1 unStr
@@ -556,6 +560,7 @@ primitiveFunctions = Map.fromList
     , "primStringAppend"    |-> mkPrimFun2 (\s1 s2 -> Str $ unStr s1 ++ unStr s2)
     , "primStringEquality"  |-> mkPrimFun2 ((==) :: Rel Str)
     , "primShowString"	    |-> mkPrimFun1 (Str . show . pretty . LitString noRange . unStr)
+    , "primStringPrefix"    |-> mkPrimFun2 (\ s1 s2 -> List.isPrefixOf (unStr s1) (unStr s2))
 
     -- Reflection
     , "primQNameType"       |-> primQNameType

@@ -123,9 +123,6 @@ coreBuiltins = map (\(x,z) -> BuiltinInfo x z)
   , (builtinAgdaDefinitionRecordDef       |-> BuiltinDataCons (trec --> tdefn))
   , (builtinAgdaDefinitionPostulate       |-> BuiltinDataCons tdefn)
   , (builtinAgdaDefinitionPrimitive       |-> BuiltinDataCons tdefn)
-  , (builtinMaybe              |-> BuiltinData (tset --> tset) [builtinJust, builtinNothing])
-  , (builtinJust               |-> BuiltinDataCons (hPi "A" tset (tv0 --> tmaybe v0)))
-  , (builtinNothing            |-> BuiltinDataCons (hPi "A" tset (tmaybe v0)))
   ]
   where
         (|->) = (,)
@@ -155,7 +152,6 @@ coreBuiltins = map (\(x,z) -> BuiltinInfo x z)
         tfun       = el primAgdaFunDef
         tdtype     = el primAgdaDataDef
         trec       = el primAgdaRecordDef
-        tmaybe a = el $ primMaybe <@> a
 
         verifyPlus plus =
             verify ["n","m"] $ \(@@) zero suc (==) choice -> do

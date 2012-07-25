@@ -12,6 +12,7 @@ import Data.Map (Map)
 import Data.Maybe (fromJust)
 import qualified Data.Maybe as Maybe
 import qualified Data.Map as Map
+import qualified Data.Maybe as Maybe
 import Data.Char
 import qualified Data.List as List
 import System.Environment as Sys
@@ -396,64 +397,6 @@ mkPrimFun1TCM mt f = do
           redReturn . fromB =<< f x
         _ -> __IMPOSSIBLE__
 
-agdaExecutePermission :: TCM String
-agdaExecutePermission = catchError (liftIO $ Sys.getEnv "AGDA_EXECUTE_PERMISSION")
-                                   (\ _ -> typeError $ GenericError "Environment variable 'AGDA_EXECUTE_PERMISSION' has not been set, not executing tool.")
-
-lookupToolPath :: String -> TCM String
-lookupToolPath tool = do
-  s <- catchError (liftIO $ Sys.getEnv "AGDA_EXTERNAL_TOOLS")
-                  (\ _ -> typeError $ GenericError "Environment variable 'AGDA_EXTERNAL_TOOLS' has not been set, it should contain a list of tools and paths or the form tool1=path1;...;tooln=pathn")
-  case look tool s of
-    "" -> typeError $ GenericError $ "Could not find the tool: " ++ tool ++ " in '" ++ s ++ "', please set 'AGDA_EXTERNAL_TOOLS' to include the tool."
-    s -> return s
-    where
-      look :: String -> String -> String
-      look tool [] = []
-      look tool s = let (a,s') = case List.findIndex (== ';') s of
-                                   Nothing -> (s,"")
-                                   (Just n) -> splitAt n s
-                        (t',p') = case List.findIndex (== '=') a of
-                                    Nothing -> ("","")
-                                    (Just n) -> splitAt n a
-                    in if t' == tool then (drop 1 p') else look tool (drop 1 s')
-
-mkExternal :: TCM PrimitiveImpl
-mkExternal = do
-    (toStr :: FromTermFunction Str)       <- fromTerm
-    t <- hPi "A" tset $  el primString --> el primString --> el (primMaybe <@> varM 0)
-    return $ PrimImpl t $ PrimFun __IMPOSSIBLE__ 3 $ \p_t ->
-        do
-          case p_t of
-            [ty_t,tool_t,str_t] -> redBind (toStr $ tool_t) (\s -> [notReduced ty_t,s,notReduced str_t]) $ \tool ->
-                                   redBind (toStr $ str_t) (\s -> [notReduced ty_t,notReduced tool_t,s]) $ \prob ->
-                   do
-                     tool <- lookupToolPath $ unStr tool
-                     agdaExecutePermission
-                     let
-                        atp_cp :: CreateProcess
-                        atp_cp = CreateProcess (RawCommand tool [])
-                                                Nothing Nothing
-                                                CreatePipe CreatePipe Inherit
-                                                True
-                     (inp,out,err,pid) <- liftIO $ createProcess atp_cp
-                     ec <- liftIO $ getProcessExitCode pid
-                     Maybe.maybe (return ()) (\ _ -> typeError $ GenericError $ "Problem executing external tool: " ++ tool ++
-                                                ", possibly environment variable AGDA_EXTERNAL_TOOLS is wrongly set.") ec
-                     result <- liftIO $ do
-                         hPutStrLn (fromJust inp) (unStr prob)
-                         hClose (fromJust inp)
-                         hGetLine (fromJust out)
-                     reportSLn "prim.mkexternal2" 2 result
-                     catchError
-                       (do
-                            e <- liftIO $ parse exprParser $ result
-                            Just s <- getPScope
-                            e' <- concreteToAbstract s e
-                            (primJust <@> checkExpr e' (El (mkType 0) (unArg ty_t))) >>= redReturn)
-                       (\ _ -> primNothing >>= redReturn)
-            _ -> __IMPOSSIBLE__
-
 -- Tying the knot
 mkPrimFun1 :: (PrimType a, PrimType b, FromTerm a, ToTerm b) =>
 	      (a -> b) -> TCM PrimitiveImpl
@@ -666,7 +609,7 @@ primitiveFunctions = Map.fromList
     , "primStringFromList"  |-> mkPrimFun1 Str
     , "primStringAppend"    |-> mkPrimFun2 (\s1 s2 -> Str $ unStr s1 ++ unStr s2)
     , "primStringEquality"  |-> mkPrimFun2 ((==) :: Rel Str)
-    , "primShowString"	    |-> mkPrimFun1 (Str . show . pretty . LitString noRange . unStr)
+    , "primShowString"      |-> mkPrimFun1 (Str . show . pretty . LitString noRange . unStr)
     , "primStringPrefix"    |-> mkPrimFun2 (\ s1 s2 -> List.isPrefixOf (unStr s1) (unStr s2))
 
     -- Reflection
@@ -677,8 +620,6 @@ primitiveFunctions = Map.fromList
     -- Other stuff
     , "primTrustMe"         |-> primTrustMe
     , "primQNameEquality"  |-> mkPrimFun2 ((==) :: Rel QName)
-
-    , "primExternal"        |-> mkExternal
     ]
     where
 	(|->) = (,)

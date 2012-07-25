@@ -76,7 +76,11 @@ primInteger, primFloat, primChar, primString, primBool, primTrue, primFalse,
     primAgdaSort, primAgdaSortSet, primAgdaSortLit, primAgdaSortUnsupported,
     primAgdaDefinition, primAgdaDefinitionFunDef, primAgdaDefinitionDataDef, primAgdaDefinitionRecordDef,
     primAgdaDefinitionPostulate, primAgdaDefinitionPrimitive, primAgdaDefinitionDataConstructor,
-    primAgdaFunDef, primAgdaDataDef, primAgdaRecordDef
+    primAgdaFunDef, primAgdaDataDef, primAgdaRecordDef,
+    primMaybe, primJust, primNothing,
+    primUnit, primTriv, primEmpty, primAtom, primATPProblem,
+    primATPInput, primATPDecProc, primATPSemantics,
+    primATPSound, primATPComplete, primATPTool
     :: TCM Term
 primInteger      = getBuiltin builtinInteger
 primFloat        = getBuiltin builtinFloat
@@ -146,6 +150,25 @@ primAgdaDefinitionDataConstructor = getBuiltin builtinAgdaDefinitionDataConstruc
 primAgdaDefinitionPostulate       = getBuiltin builtinAgdaDefinitionPostulate
 primAgdaDefinitionPrimitive       = getBuiltin builtinAgdaDefinitionPrimitive
 primAgdaDefinition                = getBuiltin builtinAgdaDefinition
+
+primMaybe   = getBuiltin builtinMaybe
+primJust    = getBuiltin builtinJust
+primNothing = getBuiltin builtinNothing
+
+primUnit = getBuiltin builtinUnit
+primTriv = getBuiltin builtinTriv
+
+primEmpty  = getBuiltin builtinEmpty
+primAtom  = getBuiltin builtinAtom
+
+primATPProblem   = getBuiltin builtinATPProblem
+primATPInput     = getBuiltin builtinATPInput
+primATPDecProc   = getBuiltin builtinATPDecProc
+primATPSemantics = getBuiltin builtinATPSemantics
+primATPSound     = getBuiltin builtinATPSound
+primATPComplete  = getBuiltin builtinATPComplete
+primATPTool     = getBuiltin builtinATPTool
+
 builtinNat          = "NATURAL"
 builtinSuc          = "SUC"
 builtinZero         = "ZERO"

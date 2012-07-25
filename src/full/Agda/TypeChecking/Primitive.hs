@@ -397,6 +397,106 @@ mkPrimFun1TCM mt f = do
           redReturn . fromB =<< f x
         _ -> __IMPOSSIBLE__
 
+agdaExecutePermission :: TCM String
+agdaExecutePermission = catchError (liftIO $ Sys.getEnv "AGDA_EXECUTE_PERMISSION")
+                                   (\ _ -> typeError $ GenericError "Environment variable 'AGDA_EXECUTE_PERMISSION' has not been set, not executing tool.")
+
+lookupToolPath :: String -> TCM String
+lookupToolPath tool = do
+  s <- catchError (liftIO $ Sys.getEnv "AGDA_EXTERNAL_TOOLS")
+                  (\ _ -> typeError $ GenericError "Environment variable 'AGDA_EXTERNAL_TOOLS' has not been set, it should contain a list of tools and paths or the form tool1=path1;...;tooln=pathn")
+  case look tool s of
+    "" -> typeError $ GenericError $ "Could not find the tool: " ++ tool ++ " in '" ++ s ++ "', please set 'AGDA_EXTERNAL_TOOLS' to include the tool."
+    s -> return s
+    where
+      look :: String -> String -> String
+      look tool [] = []
+      look tool s = let (a,s') = case List.findIndex (== ';') s of
+                                   Nothing -> (s,"")
+                                   (Just n) -> splitAt n s
+                        (t',p') = case List.findIndex (== '=') a of
+                                    Nothing -> ("","")
+                                    (Just n) -> splitAt n a
+                    in if t' == tool then (drop 1 p') else look tool (drop 1 s')
+
+mkATPDecProc :: TCM PrimitiveImpl
+mkATPDecProc = do
+    (toStr :: FromTermFunction Str)       <- fromTerm
+    atp         <- fmap (El $ mkType 0) primATPProblem
+    input_t     <- primATPInput
+    bool        <- fmap (El $ mkType 0) primBool
+    tool_t      <- primATPTool
+    let
+      input p = input_t `apply` [p]
+
+    t <- el primATPProblem --> el primBool
+    return $ PrimImpl t $ PrimFun __IMPOSSIBLE__ 1 $ \p_t ->
+        case p_t of
+          [p_t] -> liftTCM $
+                   redBind (toStr $ defaultArg $ input p_t) (\_ -> [notReduced p_t]) $ \prob ->
+                   redBind (toStr $ defaultArg tool_t) (\_ -> [notReduced p_t]) $ \tool' ->
+                       do
+                         tool <- lookupToolPath $ unStr tool'
+                         primATPSound
+                         primATPComplete
+                         agdaExecutePermission
+                         let
+                           atp_cp :: CreateProcess
+                           atp_cp = CreateProcess (RawCommand tool [])
+                                                   Nothing Nothing
+                                                   CreatePipe Inherit Inherit
+                                                   True
+                         reportSLn "prim.mkatpdecproc" 2 "Executing ATP Tool"
+                         reportSLn "prim.mkatpdecproc" 99 $ "Formula for tool: " ++ unStr prob
+                         (inp,out,err,pid) <- liftIO $ createProcess atp_cp
+                         ec <- liftIO $ getProcessExitCode pid
+                         Maybe.maybe (return ()) (\ _ -> typeError $ GenericError $ "Problem executing external tool, possibly the tool '"
+                                                                                    ++ unStr tool' ++ "' is wrongly set.") ec
+                         liftIO $ hPutStrLn (Maybe.fromJust inp) (unStr prob)
+                         liftIO $ hClose (Maybe.fromJust inp)
+                         exitcode <- liftIO $ waitForProcess pid
+                         case exitcode of
+                           ExitFailure 1 -> primFalse >>= redReturn
+                           ExitSuccess   -> primTrue >>= redReturn
+                           ExitFailure n -> typeError $ GenericError $ "ATP Error, exit code: " ++ show n ++ ", see ghci buffer"
+          _ -> __IMPOSSIBLE__
+
+mkExternal :: TCM PrimitiveImpl
+mkExternal = do
+    (toStr :: FromTermFunction Str)       <- fromTerm
+    t <- hPi "A" tset $  el primString --> el primString --> el (primMaybe <@> varM 0)
+    return $ PrimImpl t $ PrimFun __IMPOSSIBLE__ 3 $ \p_t ->
+        do
+          case p_t of
+            [ty_t,tool_t,str_t] -> redBind (toStr $ tool_t) (\s -> [notReduced ty_t,s,notReduced str_t]) $ \tool ->
+                                   redBind (toStr $ str_t) (\s -> [notReduced ty_t,notReduced tool_t,s]) $ \prob ->
+                   do
+                     tool <- lookupToolPath $ unStr tool
+                     agdaExecutePermission
+                     let
+                        atp_cp :: CreateProcess
+                        atp_cp = CreateProcess (RawCommand tool [])
+                                                Nothing Nothing
+                                                CreatePipe CreatePipe Inherit
+                                                True
+                     (inp,out,err,pid) <- liftIO $ createProcess atp_cp
+                     ec <- liftIO $ getProcessExitCode pid
+                     Maybe.maybe (return ()) (\ _ -> typeError $ GenericError $ "Problem executing external tool: " ++ tool ++
+                                                ", possibly environment variable AGDA_EXTERNAL_TOOLS is wrongly set.") ec
+                     result <- liftIO $ do
+                         hPutStrLn (fromJust inp) (unStr prob)
+                         hClose (fromJust inp)
+                         hGetLine (fromJust out)
+                     reportSLn "prim.mkexternal2" 2 result
+                     catchError
+                       (do
+                            e <- liftIO $ parse exprParser $ result
+                            Just s <- getPScope
+                            e' <- concreteToAbstract s e
+                            (primJust <@> checkExpr e' (El (mkType 0) (unArg ty_t))) >>= redReturn)
+                       (\ _ -> primNothing >>= redReturn)
+            _ -> __IMPOSSIBLE__
+
 -- Tying the knot
 mkPrimFun1 :: (PrimType a, PrimType b, FromTerm a, ToTerm b) =>
 	      (a -> b) -> TCM PrimitiveImpl
@@ -620,6 +720,9 @@ primitiveFunctions = Map.fromList
     -- Other stuff
     , "primTrustMe"         |-> primTrustMe
     , "primQNameEquality"  |-> mkPrimFun2 ((==) :: Rel QName)
+
+    , "primATPDecProc"      |-> mkATPDecProc
+    , "primExternal"        |-> mkExternal
     ]
     where
 	(|->) = (,)

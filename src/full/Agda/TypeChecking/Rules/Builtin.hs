@@ -123,6 +123,20 @@ coreBuiltins = map (\(x,z) -> BuiltinInfo x z)
   , (builtinAgdaDefinitionRecordDef       |-> BuiltinDataCons (trec --> tdefn))
   , (builtinAgdaDefinitionPostulate       |-> BuiltinDataCons tdefn)
   , (builtinAgdaDefinitionPrimitive       |-> BuiltinDataCons tdefn)
+  , (builtinMaybe              |-> BuiltinData (tset --> tset) [builtinJust, builtinNothing])
+  , (builtinJust               |-> BuiltinDataCons (hPi "A" tset (tv0 --> tmaybe v0)))
+  , (builtinNothing            |-> BuiltinDataCons (hPi "A" tset (tmaybe v0)))
+  , (builtinUnit               |-> BuiltinData tset [builtinTriv])
+  , (builtinTriv               |-> BuiltinDataCons tunit)
+  , (builtinEmpty              |-> BuiltinData tset [])
+  , (builtinAtom               |-> BuiltinUnknown (Just $ tbool --> tset) verifyAtom)
+  , (builtinATPProblem         |-> BuiltinUnknown (Just tset) (const $ return ()))
+  , (builtinATPInput           |-> BuiltinUnknown (Just $ tproblem --> tstring) (const $ return ()))
+  , (builtinATPDecProc         |-> BuiltinPrim "primATPDecProc" (const $ primATPTool >> return ()))
+  , (builtinATPTool            |-> BuiltinUnknown (Just $ tstring) (const $ return ()))
+  , (builtinATPSemantics       |-> BuiltinUnknown (Just $ tproblem --> tset) (const $ return ()))
+  , (builtinATPSound           |-> BuiltinUnknown (Just $ nPi "q" tproblem $ (tatom $ decproc v0) --> tsemantics v0) (const $ return ()))
+  , (builtinATPComplete        |-> BuiltinUnknown (Just $ nPi "q" tproblem $ tsemantics v0 --> tatom (decproc v0)) (const $ return ()))
   ]
   where
         (|->) = (,)
@@ -152,6 +166,32 @@ coreBuiltins = map (\(x,z) -> BuiltinInfo x z)
         tfun       = el primAgdaFunDef
         tdtype     = el primAgdaDataDef
         trec       = el primAgdaRecordDef
+        tmaybe a = el $ primMaybe <@> a
+        tunit      = el primUnit
+        tstring    = el primString
+        tproblem   = el primATPProblem
+        decproc f  = do
+          x <- primATPDecProc
+          f' <- f
+          return $ x `apply` [defaultArg f']
+        tatom b = el $ primAtom <@> b
+        tsemantics f = el $ primATPSemantics <@> f
+        natless n m = primNatLess <@> n <@> m
+
+        verifyAtom a = do
+            bool <- tbool
+            set <- tset
+            let x @@ y = x `apply` [defaultArg y]
+                x == y = noConstraints $ equalTerm set x y
+                atom b = a @@ b
+            xs <- mapM freshName_ ["b"]
+            addCtxs xs (defaultArg bool) $ do
+                         true  <- primTrue
+                         false <- primFalse
+                         unit <- primUnit
+                         empty <- primEmpty
+                         atom true == unit
+                         atom false == empty
 
         verifyPlus plus =
             verify ["n","m"] $ \(@@) zero suc (==) choice -> do

@@ -90,6 +90,7 @@ data TCState =
            -- ^ Callback fuction to call when there is a response
            --   to give to the interactive frontend.
            --   See the documentation of 'InteractionOutputCallback'.
+         , stParseScope        :: Maybe ScopeInfo
 	 }
 
 -- | A part of the state which is not reverted when an error is thrown
@@ -142,6 +143,7 @@ initState =
 	   , stDecodedModules    = Map.empty
            }
          , stHighlightingOutput = defaultHighlightingOutput
+         , stParseScope         = Nothing
 	 }
 
 stBuiltinThings :: TCState -> BuiltinThings PrimFun
@@ -231,6 +233,7 @@ data Interface = Interface
         , iPragmaOptions   :: [OptionsPragma]
                               -- ^ Pragma options set in the file.
         , iPatternSyns     :: A.PatternSynDefns
+        , iParseScope      :: Maybe ScopeInfo
 	}
     deriving (Typeable, Data, Show)
 

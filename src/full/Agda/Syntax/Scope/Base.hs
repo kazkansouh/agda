@@ -36,7 +36,7 @@ data Scope = Scope
       , scopeNameSpaces    :: [(NameSpaceId, NameSpace)]
       , scopeImports       :: Map C.QName A.ModuleName
       }
-  deriving (Typeable, Data)
+  deriving (Typeable, Data, Eq)
 
 data NameSpaceId = PrivateNS | PublicNS | ImportedNS | OnlyQualifiedNS
   deriving (Typeable, Data, Eq, Bounded, Enum)
@@ -61,7 +61,7 @@ data ScopeInfo = ScopeInfo
       , scopeLocals	:: LocalVars
       , scopePrecedence :: Precedence
       }
-  deriving (Typeable, Data)
+  deriving (Typeable, Data, Eq)
 
 -- | Local variables
 type LocalVars = [(C.Name, A.Name)]
@@ -73,7 +73,7 @@ data NameSpace = NameSpace
       { nsNames	  :: NamesInScope
       , nsModules :: ModulesInScope
       }
-  deriving (Typeable, Data)
+  deriving (Typeable, Data, Eq)
 
 type ThingsInScope a = Map C.Name [a]
 type NamesInScope    = ThingsInScope AbstractName

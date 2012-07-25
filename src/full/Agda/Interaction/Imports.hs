@@ -68,6 +68,7 @@ mergeInterface i = do
 	builtin = Map.toList $ iBuiltin i
 	prim	= [ x | (_,Prim x) <- builtin ]
 	bi	= Map.fromList [ (x,Builtin t) | (x,Builtin t) <- builtin ]
+        psi     = iParseScope i
     bs <- gets stBuiltinThings
     reportSLn "import.iface.merge" 10 $ "Merging interface"
     reportSLn "import.iface.merge" 20 $
@@ -82,6 +83,13 @@ mergeInterface i = do
             Just b1 = Map.lookup b bs
             Just b2 = Map.lookup b bi
     mapM_ check (map fst $ Map.toList $ Map.intersection bs bi)
+    ps <- getPScope
+    case ps of
+      Nothing -> setPScope psi
+      (Just ps) -> case psi of
+                     Nothing -> return ()
+                     (Just psi) | ps == psi -> return ()
+                                | otherwise -> typeError$ GenericError "importing conflicting parse scopes"
     addImportedThings sig bi (iHaskellImports i) (iPatternSyns i)
     reportSLn "import.iface.merge" 20 $
       "  Rebinding primitives " ++ show prim
@@ -572,6 +580,7 @@ buildInterface topLevel syntaxInfo previousHsImports pragmas = do
     ms      <- getImports
     hsImps  <- getHaskellImports
     patsyns <- getPatternSyns
+    pscope  <- getPScope
     let	builtin' = Map.mapWithKey (\x b -> fmap (const x) b) builtin
     reportSLn "import.iface" 7 "  instantiating all meta variables"
     i <- instantiateFull $ Interface
@@ -586,6 +595,7 @@ buildInterface topLevel syntaxInfo previousHsImports pragmas = do
                         , iHighlighting    = syntaxInfo
                         , iPragmaOptions   = pragmas
                         , iPatternSyns     = patsyns
+                        , iParseScope      = pscope
 			}
     reportSLn "import.iface" 7 "  interface complete"
     return i

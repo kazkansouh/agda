@@ -69,7 +69,7 @@ data Precedence = TopCtx | FunctionSpaceDomainCtx
 		| LeftOperandCtx Fixity | RightOperandCtx Fixity
 		| FunctionCtx | ArgumentCtx | InsideOperandCtx
                 | WithFunCtx | WithArgCtx | DotPatternCtx
-    deriving (Show,Typeable,Data)
+    deriving (Show,Typeable,Data,Eq)
 
 
 -- | The precedence corresponding to a possibly hidden argument.

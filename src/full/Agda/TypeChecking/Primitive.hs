@@ -9,9 +9,15 @@ module Agda.TypeChecking.Primitive where
 import Control.Monad
 import Control.Monad.Error
 import Data.Map (Map)
+import Data.Maybe (fromJust)
+import qualified Data.Maybe as Maybe
 import qualified Data.Map as Map
 import Data.Char
 import qualified Data.List as List
+import System.Environment as Sys
+import System.Process
+import System.Exit
+import System.IO
 
 import Agda.Interaction.Options
 
@@ -19,9 +25,12 @@ import Agda.Syntax.Position
 import Agda.Syntax.Common hiding (Nat)
 import Agda.Syntax.Internal
 import Agda.Syntax.Literal
+import Agda.Syntax.Parser
 import Agda.Syntax.Concrete.Pretty ()
 import Agda.Syntax.Abstract.Name
 import qualified Agda.Syntax.Concrete.Name as C
+import Agda.Syntax.Translation.ConcreteToAbstract (concreteToAbstract)
+import Agda.Syntax.Scope.Monad as Scope
 
 import Agda.TypeChecking.Monad
 import Agda.TypeChecking.Monad.Builtin
@@ -33,6 +42,7 @@ import Agda.TypeChecking.Pretty ()  -- instances only
 import {-# SOURCE #-} Agda.TypeChecking.Conversion
 import Agda.TypeChecking.Constraints
 import Agda.TypeChecking.Level
+import {-# SOURCE #-} Agda.TypeChecking.Rules.Term (checkExpr)
 
 import Agda.Utils.Monad
 import Agda.Utils.Pretty (pretty)
@@ -100,6 +110,12 @@ instance PrimTerm Lvl     where primTerm _ = primLevel
 instance PrimTerm QName   where primTerm _ = primQName
 instance PrimTerm Type    where primTerm _ = primAgdaType
 
+instance PrimTerm a => PrimTerm (Maybe a) where
+    primTerm _ = do
+      x  <- primMaybe
+      a' <- primTerm (undefined :: a)
+      return $ x `apply` [defaultArg a']
+
 instance PrimTerm a => PrimTerm [a] where
     primTerm _ = list (primTerm (undefined :: a))
 
@@ -127,6 +143,15 @@ instance ToTerm Bool where
 
 instance ToTerm Type where
     toTerm = snd <$> quotingKit
+
+instance (FromTerm a , ToTerm a) => ToTerm (Maybe a) where
+    toTerm = do
+      just <- fmap (\ x -> \ a -> x `apply` [defaultArg a]) primJust
+      nothing <- primNothing
+      (fromA :: a -> Term) <- toTerm
+      return $ \ t -> case t of
+                        (Just a) -> just (fromA a)
+                        Nothing  -> nothing
 
 -- | @buildList A ts@ builds a list of type @List A@. Assumes that the terms
 --   @ts@ all have type @A@.
@@ -233,6 +258,30 @@ instance (ToTerm a, FromTerm a) => FromTerm [a] where
                   (fmap $ \xs' -> arg $ Con c [defaultArg $ fromA y, xs']) $ \ys ->
               redReturn (y : ys)
           _ -> return $ NoReduction (reduced b)
+
+instance (ToTerm a , FromTerm a) => FromTerm (Maybe a) where
+    fromTerm = do
+      just <- isCon =<< primJust
+      nothing <- isCon =<< primNothing
+      (toA :: FromTermFunction a) <- fromTerm
+      return $ \ t -> do
+                 b <- reduceB t
+                 let t = ignoreBlocking b
+                     arg = Arg (argHiding t) (argRelevance t)
+                 case unArg t of
+                   Con c [a]
+                       | c == just -> redBind (toA a) (\ a' -> notReduced $ arg $ Con c [ignoreReduced a']) $ \ a' ->
+                                      redReturn $ Just a'
+                   Con c []
+                       | c == nothing -> redReturn $ Nothing
+                   _ -> return $ NoReduction (reduced b)
+      where
+        isCon (Lam _ b) = isCon $ absBody b
+        isCon (Con c _) = return c
+        isCon v	    = do
+                 d <- prettyTCM v
+                 typeError $ GenericError $ "expected constructor in built-in binding to " ++ show d
+                 -- TODO: check this when binding the things
 
 -- | Conceptually: @redBind m f k = either (return . Left . f) k =<< m@
 redBind :: TCM (Reduced a a') -> (a -> b) ->
@@ -346,6 +395,64 @@ mkPrimFun1TCM mt f = do
               (\v' -> [v']) $ \x ->
           redReturn . fromB =<< f x
         _ -> __IMPOSSIBLE__
+
+agdaExecutePermission :: TCM String
+agdaExecutePermission = catchError (liftIO $ Sys.getEnv "AGDA_EXECUTE_PERMISSION")
+                                   (\ _ -> typeError $ GenericError "Environment variable 'AGDA_EXECUTE_PERMISSION' has not been set, not executing tool.")
+
+lookupToolPath :: String -> TCM String
+lookupToolPath tool = do
+  s <- catchError (liftIO $ Sys.getEnv "AGDA_EXTERNAL_TOOLS")
+                  (\ _ -> typeError $ GenericError "Environment variable 'AGDA_EXTERNAL_TOOLS' has not been set, it should contain a list of tools and paths or the form tool1=path1;...;tooln=pathn")
+  case look tool s of
+    "" -> typeError $ GenericError $ "Could not find the tool: " ++ tool ++ " in '" ++ s ++ "', please set 'AGDA_EXTERNAL_TOOLS' to include the tool."
+    s -> return s
+    where
+      look :: String -> String -> String
+      look tool [] = []
+      look tool s = let (a,s') = case List.findIndex (== ';') s of
+                                   Nothing -> (s,"")
+                                   (Just n) -> splitAt n s
+                        (t',p') = case List.findIndex (== '=') a of
+                                    Nothing -> ("","")
+                                    (Just n) -> splitAt n a
+                    in if t' == tool then (drop 1 p') else look tool (drop 1 s')
+
+mkExternal :: TCM PrimitiveImpl
+mkExternal = do
+    (toStr :: FromTermFunction Str)       <- fromTerm
+    t <- hPi "A" tset $  el primString --> el primString --> el (primMaybe <@> varM 0)
+    return $ PrimImpl t $ PrimFun __IMPOSSIBLE__ 3 $ \p_t ->
+        do
+          case p_t of
+            [ty_t,tool_t,str_t] -> redBind (toStr $ tool_t) (\s -> [notReduced ty_t,s,notReduced str_t]) $ \tool ->
+                                   redBind (toStr $ str_t) (\s -> [notReduced ty_t,notReduced tool_t,s]) $ \prob ->
+                   do
+                     tool <- lookupToolPath $ unStr tool
+                     agdaExecutePermission
+                     let
+                        atp_cp :: CreateProcess
+                        atp_cp = CreateProcess (RawCommand tool [])
+                                                Nothing Nothing
+                                                CreatePipe CreatePipe Inherit
+                                                True
+                     (inp,out,err,pid) <- liftIO $ createProcess atp_cp
+                     ec <- liftIO $ getProcessExitCode pid
+                     Maybe.maybe (return ()) (\ _ -> typeError $ GenericError $ "Problem executing external tool: " ++ tool ++
+                                                ", possibly environment variable AGDA_EXTERNAL_TOOLS is wrongly set.") ec
+                     result <- liftIO $ do
+                         hPutStrLn (fromJust inp) (unStr prob)
+                         hClose (fromJust inp)
+                         hGetLine (fromJust out)
+                     reportSLn "prim.mkexternal2" 2 result
+                     catchError
+                       (do
+                            e <- liftIO $ parse exprParser $ result
+                            Just s <- getPScope
+                            e' <- concreteToAbstract s e
+                            (primJust <@> checkExpr e' (El (mkType 0) (unArg ty_t))) >>= redReturn)
+                       (\ _ -> primNothing >>= redReturn)
+            _ -> __IMPOSSIBLE__
 
 -- Tying the knot
 mkPrimFun1 :: (PrimType a, PrimType b, FromTerm a, ToTerm b) =>
@@ -570,6 +677,8 @@ primitiveFunctions = Map.fromList
     -- Other stuff
     , "primTrustMe"         |-> primTrustMe
     , "primQNameEquality"  |-> mkPrimFun2 ((==) :: Rel QName)
+
+    , "primExternal"        |-> mkExternal
     ]
     where
 	(|->) = (,)

@@ -76,7 +76,8 @@ primInteger, primFloat, primChar, primString, primBool, primTrue, primFalse,
     primAgdaSort, primAgdaSortSet, primAgdaSortLit, primAgdaSortUnsupported,
     primAgdaDefinition, primAgdaDefinitionFunDef, primAgdaDefinitionDataDef, primAgdaDefinitionRecordDef,
     primAgdaDefinitionPostulate, primAgdaDefinitionPrimitive, primAgdaDefinitionDataConstructor,
-    primAgdaFunDef, primAgdaDataDef, primAgdaRecordDef
+    primAgdaFunDef, primAgdaDataDef, primAgdaRecordDef,
+    primMaybe, primJust, primNothing
     :: TCM Term
 primInteger      = getBuiltin builtinInteger
 primFloat        = getBuiltin builtinFloat
@@ -146,6 +147,11 @@ primAgdaDefinitionDataConstructor = getBuiltin builtinAgdaDefinitionDataConstruc
 primAgdaDefinitionPostulate       = getBuiltin builtinAgdaDefinitionPostulate
 primAgdaDefinitionPrimitive       = getBuiltin builtinAgdaDefinitionPrimitive
 primAgdaDefinition                = getBuiltin builtinAgdaDefinition
+
+primMaybe   = getBuiltin builtinMaybe
+primJust    = getBuiltin builtinJust
+primNothing = getBuiltin builtinNothing
+
 builtinNat          = "NATURAL"
 builtinSuc          = "SUC"
 builtinZero         = "ZERO"
@@ -214,3 +220,7 @@ builtinAgdaDefinitionDataConstructor = "AGDADEFINITIONDATACONSTRUCTOR"
 builtinAgdaDefinitionPostulate       = "AGDADEFINITIONPOSTULATE"
 builtinAgdaDefinitionPrimitive       = "AGDADEFINITIONPRIMITIVE"
 builtinAgdaDefinition                = "AGDADEFINITION"
+
+builtinMaybe        = "MAYBE"
+builtinJust         = "JUST"
+builtinNothing      = "NOTHING"

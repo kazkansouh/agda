@@ -162,6 +162,14 @@ checkAxiom i rel x e = do
   -- Andreas, 2011-05-31, that freezing below is probably wrong:
   -- when (Info.defAbstract i == AbstractDef) $ freezeMetas
 
+saveExternalScope :: TCM ()
+saveExternalScope = do
+  s <- getScope
+  s' <- getPScope
+  case s' of
+    Nothing -> setPScope $ Just s
+    _ -> typeError $ GenericError "parse scope already used, cant redefine."
+
 -- | Type check a primitive function declaration.
 checkPrimitive :: Info.DefInfo -> QName -> A.Expr -> TCM ()
 checkPrimitive i x e =
@@ -170,6 +178,7 @@ checkPrimitive i x e =
     t <- isType_ e
     noConstraints $ equalType t t'
     let s  = show $ nameConcrete $ qnameName x
+    if (nameString $ qnameName x) == "primExternal" then saveExternalScope else return ()
     bindPrimitive s $ pf { primFunName = x }
     addConstant x (Defn Relevant x t (defaultDisplayForm x) 0 noCompiledRep $
                 Primitive (Info.defAbstract i) s Nothing Nothing)

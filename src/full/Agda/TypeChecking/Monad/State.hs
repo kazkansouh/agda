@@ -37,6 +37,12 @@ setScope scope = modify $ \s -> s { stScope = scope }
 getScope :: TCM ScopeInfo
 getScope = gets stScope
 
+getPScope :: TCM (Maybe ScopeInfo)
+getPScope = gets stParseScope
+
+setPScope :: Maybe ScopeInfo -> TCM ()
+setPScope si = modify $ \s -> s { stParseScope = si }
+
 getPatternSyns :: TCM PatternSynDefns
 getPatternSyns = gets stPatternSyns
 

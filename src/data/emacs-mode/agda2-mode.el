@@ -80,6 +80,12 @@ the root of the current project."
   :type '(repeat directory)
   :group 'agda2)
 
+(defcustom agda2-external-tools
+  'nil
+  "Names and paths of external tools."
+  :type '(repeat (cons (string :tag "Tool Name") (file :tag "Executable Path")))
+  :group 'agda2)
+
 (defcustom agda2-backend
   "MAlonzo"
   "The backend which is used to compile Agda programs."
@@ -390,6 +396,15 @@ Special commands:
  ;; seem to remove the text properties set by the Agda mode.
  (add-hook 'change-major-mode-hook 'agda2-quit nil 'local)))
 
+(defun agda2-export-external-tools ()
+       "Formats the paths of the external tools, and exports them to the env variable AGDA_EXTERNAL_TOOLS"
+       (setq list agda2-external-tools)
+       (setq acc ())
+       (while list
+         (setq acc (concat acc (concat (concat (car (car list)) (concat "=" (cdr (car list)))) ";")))
+         (setq list (cdr list)))
+       (if (not (not acc)) (setenv "AGDA_EXTERNAL_TOOLS" (substring acc 0 -1))))
+
 (defun agda2-restart ()
   "Kill and restart the *ghci* buffer and load `agda2-toplevel-module'."
   (interactive)
@@ -408,6 +423,7 @@ Special commands:
                       (error nil))
                     (set (make-local-variable 'haskell-ghci-program-args)
                          (append agda2-ghci-options haskell-ghci-program-args))
+		    (agda2-export-external-tools)
                     (haskell-ghci-start-process nil)
                     (setq agda2-process        haskell-ghci-process
                           agda2-process-buffer haskell-ghci-process-buffer

@@ -446,6 +446,9 @@ mkATPDecProc = do
                                                    Nothing Nothing
                                                    CreatePipe Inherit Inherit
                                                    True
+#if MIN_VERSION_process(1,1,0)
+                                                   True
+#endif
                          reportSLn "prim.mkatpdecproc" 2 "Executing ATP Tool"
                          reportSLn "prim.mkatpdecproc" 99 $ "Formula for tool: " ++ unStr prob
                          (inp,out,err,pid) <- liftIO $ createProcess atp_cp
@@ -479,6 +482,9 @@ mkExternal = do
                                                 Nothing Nothing
                                                 CreatePipe CreatePipe Inherit
                                                 True
+#if MIN_VERSION_process(1,1,0)
+                                                True
+#endif
                      (inp,out,err,pid) <- liftIO $ createProcess atp_cp
                      ec <- liftIO $ getProcessExitCode pid
                      Maybe.maybe (return ()) (\ _ -> typeError $ GenericError $ "Problem executing external tool: " ++ tool ++

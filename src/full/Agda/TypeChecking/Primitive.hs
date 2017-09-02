@@ -443,11 +443,14 @@ mkATPDecProc = do
                          let
                            atp_cp :: CreateProcess
                            atp_cp = CreateProcess (RawCommand tool [])
-                                                   Nothing Nothing
-                                                   CreatePipe Inherit Inherit
-                                                   True
+                                                  Nothing
+                                                  Nothing
+                                                  CreatePipe
+                                                  Inherit
+                                                  Inherit
+                                                  True
 #if MIN_VERSION_process(1,1,0)
-                                                   True
+                                                  True
 #endif
                          reportSLn "prim.mkatpdecproc" 2 "Executing ATP Tool"
                          reportSLn "prim.mkatpdecproc" 99 $ "Formula for tool: " ++ unStr prob
@@ -479,11 +482,14 @@ mkExternal = do
                      let
                         atp_cp :: CreateProcess
                         atp_cp = CreateProcess (RawCommand tool [])
-                                                Nothing Nothing
-                                                CreatePipe CreatePipe Inherit
-                                                True
+                                               Nothing
+                                               Nothing
+                                               CreatePipe
+                                               CreatePipe
+                                               Inherit
+                                               True
 #if MIN_VERSION_process(1,1,0)
-                                                True
+                                               True
 #endif
                      (inp,out,err,pid) <- liftIO $ createProcess atp_cp
                      ec <- liftIO $ getProcessExitCode pid
